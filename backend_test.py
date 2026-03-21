@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class DreamOvenAPITester:
-    def __init__(self, base_url="https://task-starter-6.preview.emergentagent.com"):
+    def __init__(self, base_url="https://dreamoven-preview-1.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
