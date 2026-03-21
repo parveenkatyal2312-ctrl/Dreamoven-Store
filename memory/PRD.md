@@ -5,9 +5,10 @@ Set up DREAMOVEN Inventory Management System with:
 - Pull inventory app from GitHub repo (kinfolk-store)
 - Set up as fresh DREAMOVEN instance with new database
 - Initialize with: 14 kitchens, 1 main store, admin user, 683 items, 47 vendors
+- Full feature parity with original Kinfolk Store app
 
 ## User Personas
-1. **Admin (Primary)**: Full access to all features - manage items, vendors, kitchens, purchase orders
+1. **Admin (Primary)**: Full access to all features - manage items, vendors, kitchens, purchase orders, stock, reports
 2. **Store Manager**: View/manage inventory for assigned kitchen
 3. **Procurement**: Create and manage purchase orders
 
@@ -16,7 +17,10 @@ Set up DREAMOVEN Inventory Management System with:
 - Kitchen/Store management (15 total: 1 main + 14 branches)
 - Item inventory management with categories
 - Vendor management
-- Purchase order system
+- Purchase order system with status filtering
+- GRN (Goods Receipt Note) system
+- Current stock tracking with editable values
+- Reports and analytics
 - Dashboard with analytics
 
 ## Architecture
@@ -25,47 +29,64 @@ Set up DREAMOVEN Inventory Management System with:
 - **Database**: MongoDB
 - **Authentication**: JWT-based
 
-## What's Been Implemented (Jan 2026)
-### Backend
+## What's Been Implemented
+
+### Phase 1 (Jan 2026) - Core Setup
 - ✅ User authentication (login, JWT tokens)
 - ✅ Kitchens CRUD API
 - ✅ Items CRUD API with search/filter
 - ✅ Vendors CRUD API
 - ✅ Categories CRUD API
-- ✅ Purchase Orders API
 - ✅ Dashboard stats API
-- ✅ Data seeding script
+- ✅ Data seeding script (797 items, 69 vendors, 15 kitchens)
 
-### Frontend
-- ✅ Login page with DREAMOVEN branding
-- ✅ Dashboard with stats cards and category breakdown
-- ✅ Items management page (search, filter, CRUD)
-- ✅ Kitchens management page
-- ✅ Vendors management page
-- ✅ Categories management page
-- ✅ Purchase Orders page
-- ✅ Responsive sidebar navigation
-- ✅ Dark theme UI
+### Phase 2 (March 21, 2026) - Feature Parity with Kinfolk Store
+- ✅ **Purchase Orders** with full features:
+  - Status filter tabs (Pending, Partial, Received, All) with counts
+  - Summary cards showing status counts
+  - Vendor filter chips
+  - PO detail modal with items table
+  - GRN verification section in PO details
+  - View, PDF, Email buttons
+  - Admin can delete PO before GRN
+  - Protection: Cannot delete received POs
+  
+- ✅ **Current Stock** with full features:
+  - Summary cards (Total Items, Today's GRN Items, Below Par Stock, Stock OK)
+  - Filter tabs (All, Below Par, Stock OK) with counts
+  - Table columns: Item, Category, Current, Today GRN, Total, Par Stock, Status
+  - Admin can edit current stock and par stock values
+  - Status bar showing deficit level
+  - Action buttons (Upload Opening Stock, Stock Ledger, Export to Excel, Update PAR Stock)
+
+- ✅ **Reports** fully integrated:
+  - Vendor Ledger report with PO/GRN data
+  - Kitchen Ledger report
+  - Daywise Reports
+  - Stock in Hand Main Store
+  - Consumption Analysis
+  - Date filters and Excel export button
+
+- ✅ **GRN System**:
+  - GRN creation from approved POs
+  - Auto stock update on GRN receipt
+  - Today's GRN tracking in Current Stock
+  - GRN verification photos support (UI ready)
+
+- ✅ **Additional Features**:
+  - Requisitions management
+  - Issue items to kitchens
+  - Daily Perishables tracking
+  - Alerts for low stock
+  - Auto PO generation suggestions
+  - Users management
 
 ### Seeded Data
 - Admin User: parveenkatyal2312@gmail.com / admin@123
 - 15 Kitchens (Main Store + 14 branches)
-- 69 Vendors (47 original + 22 new)
-- 797 Items (685 original + 112 new from Excel)
+- 69 Vendors
+- 797 Items
 - 14 Categories
-
-### New Vendors Added (Jan 2026)
-- AKSHAY BUSINESS SOLUTION
-- KIM SHIN FINE FOODS PVT.LTD.
-- SHRI TIRUPATI STORE
-- PINK APPLE GOURMET PVT LTD
-- HINDUSTAN DRUG HOUSE
-- OSWAL AGENCIES
-- BAKEWELL FOODS
-- SILICO
-- POLYWRAP
-- SATYA SALES
-- And more...
 
 ## Kitchen List
 1. Main Store (MAIN)
@@ -85,29 +106,74 @@ Set up DREAMOVEN Inventory Management System with:
 15. Sticky Rice Noida (SRND)
 
 ## Prioritized Backlog
-### P0 (Critical)
+### P0 (Critical) - COMPLETE
 - ✅ Authentication
 - ✅ Dashboard
 - ✅ Items management
 - ✅ Kitchens management
 - ✅ Vendors management
+- ✅ Purchase Orders with status filters
+- ✅ Current Stock with full columns
+- ✅ Reports integration
+- ✅ GRN system
 
-### P1 (Important)
-- Stock tracking per kitchen
-- Purchase order items selection
-- Low stock alerts
-- Bulk item import/export
+### P1 (Important) - Partial
+- ✅ Stock tracking per kitchen
+- ✅ Low stock alerts
+- 🔄 Bulk item import/export (UI buttons exist)
+- 🔄 5-step GRN workflow (basic 1-step implemented)
 
 ### P2 (Nice to Have)
-- User role management
-- Reports generation
-- Mobile responsive optimizations
+- User role-based access control
+- PDF generation for POs
+- Email sending for POs
+- WhatsApp integration
+- Mobile QR scanning
 - Barcode scanning
 - Audit logs
 
+## API Endpoints
+
+### Authentication
+- POST /api/auth/login
+- GET /api/auth/me
+
+### Purchase Orders
+- GET /api/purchase-orders
+- GET /api/purchase-orders/{id}
+- POST /api/purchase-orders
+- PUT /api/purchase-orders/{id}/status
+- DELETE /api/purchase-orders/{id}
+- GET /api/purchase-orders/stats/summary
+
+### Current Stock
+- GET /api/current-stock
+- GET /api/current-stock/stats
+- POST /api/current-stock/update
+
+### Reports
+- GET /api/reports/vendor-ledger
+- GET /api/reports/kitchen-ledger
+- GET /api/reports/stock-in-hand
+- GET /api/reports/consumption-analysis
+- GET /api/reports/daywise
+
+### Other
+- GET/POST /api/grns
+- GET/POST /api/requisitions
+- GET/POST /api/issues
+- GET/POST /api/daily-perishables
+- GET /api/alerts
+- GET /api/dashboard/stats
+
+## Testing
+- Backend: 100% pass rate (19/19 tests)
+- Frontend: All UI flows verified
+- Test report: /app/test_reports/iteration_2.json
+
 ## Next Tasks
-1. Add stock tracking functionality per kitchen
-2. Implement purchase order line items
-3. Add low stock alerts on dashboard
-4. Bulk import items from Excel
-5. Add user management for multiple roles
+1. Implement 5-step GRN workflow (Item verification, Photo capture, Weight check, Quality check, Final approval)
+2. Add PDF generation for Purchase Orders
+3. Add Email functionality for POs
+4. Implement bulk import/export from Excel
+5. Add WhatsApp sharing for POs
