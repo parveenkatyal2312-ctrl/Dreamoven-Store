@@ -27,10 +27,25 @@ Set up DREAMOVEN Inventory Management System with:
 - Dashboard with analytics
 
 ## Architecture
-- **Backend**: FastAPI (Python) with MongoDB - **16,447 lines** (full feature set)
+- **Backend**: FastAPI (Python) with MongoDB - **16,500+ lines** (full feature set)
 - **Frontend**: React.js with Tailwind CSS - **37 page components**
-- **Database**: MongoDB
+- **Database**: MongoDB Atlas (M10 cluster - Mumbai region)
+- **Image Storage**: Cloudflare R2 (for GRN photos)
 - **Authentication**: JWT-based with role support
+
+## Infrastructure (Production Ready)
+
+### MongoDB Atlas
+- **Cluster**: cluster0.lbaoz0.mongodb.net
+- **Database**: dreamoven_db
+- **Tier**: M10 Dedicated (~$57/month)
+- **Region**: AWS Mumbai (ap-south-1)
+
+### Cloudflare R2 Storage
+- **Bucket**: dreamoven-storage
+- **Public URL**: https://pub-cd0157ddd3e442bd9e2313f13cb121f5.r2.dev
+- **Region**: Asia-Pacific (APAC)
+- **Free Tier**: 10GB storage, 1M Class A ops, 10M Class B ops/month
 
 ## What's Been Implemented
 

@@ -49,6 +49,7 @@ R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY")
 R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY")
 R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "dreamoven-storage")
 R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else None
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "")  # Public URL for viewing images
 
 # Initialize R2 client
 r2_client = None
@@ -6038,8 +6039,11 @@ async def upload_image_to_r2(
             ContentType=file.content_type
         )
         
-        # Generate URL (using R2 endpoint)
-        file_url = f"{R2_ENDPOINT_URL}/{R2_BUCKET_NAME}/{unique_filename}"
+        # Generate URL (use public URL if available, otherwise endpoint URL)
+        if R2_PUBLIC_URL:
+            file_url = f"{R2_PUBLIC_URL}/{unique_filename}"
+        else:
+            file_url = f"{R2_ENDPOINT_URL}/{R2_BUCKET_NAME}/{unique_filename}"
         
         return {
             "success": True,
@@ -6090,8 +6094,11 @@ async def upload_base64_to_r2(
             ContentType=content_type
         )
         
-        # Generate URL
-        file_url = f"{R2_ENDPOINT_URL}/{R2_BUCKET_NAME}/{unique_filename}"
+        # Generate URL (use public URL if available)
+        if R2_PUBLIC_URL:
+            file_url = f"{R2_PUBLIC_URL}/{unique_filename}"
+        else:
+            file_url = f"{R2_ENDPOINT_URL}/{R2_BUCKET_NAME}/{unique_filename}"
         
         return {
             "success": True,
