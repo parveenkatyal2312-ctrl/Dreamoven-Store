@@ -50,9 +50,22 @@ Set up DREAMOVEN Inventory Management System with:
 ### Seeded Data
 - Admin User: parveenkatyal2312@gmail.com / admin@123
 - 15 Kitchens (Main Store + 14 branches)
-- 47 Vendors
-- 685 Items
+- 69 Vendors (47 original + 22 new)
+- 797 Items (685 original + 112 new from Excel)
 - 14 Categories
+
+### New Vendors Added (Jan 2026)
+- AKSHAY BUSINESS SOLUTION
+- KIM SHIN FINE FOODS PVT.LTD.
+- SHRI TIRUPATI STORE
+- PINK APPLE GOURMET PVT LTD
+- HINDUSTAN DRUG HOUSE
+- OSWAL AGENCIES
+- BAKEWELL FOODS
+- SILICO
+- POLYWRAP
+- SATYA SALES
+- And more...
 
 ## Kitchen List
 1. Main Store (MAIN)
