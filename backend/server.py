@@ -43,6 +43,30 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 KITCHEN_APP_URL = os.environ.get("KITCHEN_APP_URL")  # URL of the Kitchen App for cross-app photo fetching
 
+# Cloudflare R2 Configuration
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
+R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY")
+R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY")
+R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "dreamoven-storage")
+R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else None
+
+# Initialize R2 client
+r2_client = None
+if R2_ACCOUNT_ID and R2_ACCESS_KEY and R2_SECRET_KEY:
+    try:
+        import boto3
+        from botocore.config import Config
+        r2_client = boto3.client(
+            's3',
+            endpoint_url=R2_ENDPOINT_URL,
+            aws_access_key_id=R2_ACCESS_KEY,
+            aws_secret_access_key=R2_SECRET_KEY,
+            config=Config(signature_version='s3v4')
+        )
+        print("✅ Cloudflare R2 client initialized")
+    except Exception as e:
+        print(f"⚠️ R2 initialization failed: {e}")
+
 # MongoDB connection with timeout settings optimized for Atlas
 client = MongoClient(
     MONGO_URL,
@@ -5979,6 +6003,128 @@ async def create_category(name: str = Query(...)):
     doc = {"name": name, "created_at": datetime.now(timezone.utc).isoformat()}
     result = categories_collection.insert_one(doc)
     return {"id": str(result.inserted_id), "message": "Category created successfully"}
+
+# ==================== FILE UPLOAD TO R2 ====================
+
+@app.post("/api/upload/image")
+async def upload_image_to_r2(
+    file: UploadFile = File(...),
+    folder: str = Query("grn-photos", description="Folder name in R2 bucket"),
+    current_user = Depends(get_current_user)
+):
+    """Upload an image to Cloudflare R2 and return the URL"""
+    if not r2_client:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {allowed_types}")
+    
+    # Generate unique filename
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    file_ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    unique_filename = f"{folder}/{timestamp}_{os.urandom(4).hex()}.{file_ext}"
+    
+    try:
+        # Read file content
+        contents = await file.read()
+        
+        # Upload to R2
+        r2_client.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=unique_filename,
+            Body=contents,
+            ContentType=file.content_type
+        )
+        
+        # Generate URL (using R2 endpoint)
+        file_url = f"{R2_ENDPOINT_URL}/{R2_BUCKET_NAME}/{unique_filename}"
+        
+        return {
+            "success": True,
+            "url": file_url,
+            "key": unique_filename,
+            "filename": file.filename,
+            "size": len(contents)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@app.post("/api/upload/base64")
+async def upload_base64_to_r2(
+    image_data: str = Form(..., description="Base64 encoded image data"),
+    folder: str = Form("grn-photos", description="Folder name in R2 bucket"),
+    filename: str = Form(None, description="Optional filename"),
+    current_user = Depends(get_current_user)
+):
+    """Upload a base64 encoded image to Cloudflare R2"""
+    if not r2_client:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    try:
+        # Remove data URL prefix if present
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+        
+        # Decode base64
+        image_bytes = base64.b64decode(image_data)
+        
+        # Generate unique filename
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ext = filename.split(".")[-1] if filename and "." in filename else "jpg"
+        unique_filename = f"{folder}/{timestamp}_{os.urandom(4).hex()}.{ext}"
+        
+        # Determine content type
+        content_type = "image/jpeg"
+        if ext.lower() == "png":
+            content_type = "image/png"
+        elif ext.lower() == "webp":
+            content_type = "image/webp"
+        
+        # Upload to R2
+        r2_client.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=unique_filename,
+            Body=image_bytes,
+            ContentType=content_type
+        )
+        
+        # Generate URL
+        file_url = f"{R2_ENDPOINT_URL}/{R2_BUCKET_NAME}/{unique_filename}"
+        
+        return {
+            "success": True,
+            "url": file_url,
+            "key": unique_filename,
+            "size": len(image_bytes)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@app.delete("/api/upload/{key:path}")
+async def delete_from_r2(
+    key: str,
+    current_user = Depends(require_role(["admin", "main_store"]))
+):
+    """Delete a file from R2"""
+    if not r2_client:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    try:
+        r2_client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+        return {"success": True, "message": "File deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+@app.get("/api/upload/status")
+async def get_r2_status():
+    """Check R2 storage status"""
+    return {
+        "configured": r2_client is not None,
+        "bucket": R2_BUCKET_NAME if r2_client else None,
+        "endpoint": R2_ENDPOINT_URL if r2_client else None
+    }
 
 # GRN
 @app.post("/api/grn")
