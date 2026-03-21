@@ -6,28 +6,31 @@ Set up DREAMOVEN Inventory Management System with:
 - Set up as fresh DREAMOVEN instance with new database
 - Initialize with: 14 kitchens, 1 main store, admin user, 683 items, 47 vendors
 - Full feature parity with original Kinfolk Store app
+- **Full Migration Completed March 21, 2026**
 
-## User Personas
-1. **Admin (Primary)**: Full access to all features - manage items, vendors, kitchens, purchase orders, stock, reports
-2. **Store Manager**: View/manage inventory for assigned kitchen
-3. **Procurement**: Create and manage purchase orders
+## User Personas & Roles
+1. **Admin**: Full access to all features - manage items, vendors, kitchens, purchase orders, stock, reports, users
+2. **Main Store**: Process requisitions from kitchens, manage GRNs, issue items
+3. **Kitchen**: Raise requisitions to main store, create POs for daily perishables, receive goods
 
 ## Core Requirements (Static)
 - User authentication with JWT
+- **Role-based access control** (admin, main_store, kitchen)
 - Kitchen/Store management (15 total: 1 main + 14 branches)
 - Item inventory management with categories
 - Vendor management
 - Purchase order system with status filtering
-- GRN (Goods Receipt Note) system
+- **5-step GRN workflow** with photo capture and GPS
 - Current stock tracking with editable values
+- **Requisitions flow**: Kitchen → Main Store
 - Reports and analytics
 - Dashboard with analytics
 
 ## Architecture
-- **Backend**: FastAPI (Python) with MongoDB
-- **Frontend**: React.js with Tailwind CSS
+- **Backend**: FastAPI (Python) with MongoDB - **16,447 lines** (full feature set)
+- **Frontend**: React.js with Tailwind CSS - **37 page components**
 - **Database**: MongoDB
-- **Authentication**: JWT-based
+- **Authentication**: JWT-based with role support
 
 ## What's Been Implemented
 
@@ -81,9 +84,43 @@ Set up DREAMOVEN Inventory Management System with:
   - Auto PO generation suggestions
   - Users management
 
+### Phase 3 (March 21, 2026) - Full Codebase Migration
+- ✅ **Complete Migration from Original Kinfolk Store**:
+  - Migrated 16,447-line backend (server.py)
+  - Migrated 37 frontend page components
+  - Migrated AuthContext with role support
+  - Migrated Layout with role-based sidebar
+
+- ✅ **Role-Based Access Control**:
+  - Admin: Full access to all 15+ menu items
+  - Main Store: Access to inventory management features
+  - Kitchen: Limited to My Requisitions, Purchase Orders, Receive Goods, Scan QR
+
+- ✅ **Requisition Workflow** (Kitchen → Main Store):
+  - Kitchen users raise requisitions to Main Store
+  - Main Store receives and processes requisitions
+  - Status tracking: Pending → In Progress → Completed
+  - Priority tags (URGENT/NORMAL)
+
+- ✅ **5-Step GRN Workflow**:
+  - Quick Search by PO Number
+  - Browse by Vendor dropdown
+  - Photo capture with GPS location
+  - LOT number tracking
+  - Recent GRNs list
+
+- ✅ **Test Users Created**:
+  - Admin: parveenkatyal2312@gmail.com / admin@123
+  - Main Store: mainstore@dreamoven.com / store@123
+  - Kitchen (Sticky Rice PB): srpb@dreamoven.com / kitchen@123
+  - Kitchen (Kalaunji PB): klpb@dreamoven.com / kitchen@123
+  - Kitchen (Coimbatore): cmbr@dreamoven.com / kitchen@123
+  - Kitchen (Aioli): aiol@dreamoven.com / kitchen@123
+  - Kitchen (DO Cafe): docf@dreamoven.com / kitchen@123
+
 ### Seeded Data
 - Admin User: parveenkatyal2312@gmail.com / admin@123
-- 15 Kitchens (Main Store + 14 branches)
+- 15 Locations (Main Store + 14 kitchens)
 - 69 Vendors
 - 797 Items
 - 14 Categories
