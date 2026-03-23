@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ClipboardList, Plus, Send, Check, AlertTriangle, Clock, Package, Minus, FileText, Download, MapPin, Calendar, ChevronsUpDown, Trash2 } from 'lucide-react';
+import { ClipboardList, Plus, Send, Check, AlertTriangle, Clock, Package, Minus, FileText, Download, MapPin, Calendar, ChevronsUpDown, Trash2, XCircle, AlertOctagon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getItems, getLocations } from '../lib/api';
 import api from '../lib/api';
@@ -86,8 +86,8 @@ function getCategoryColor(category) {
   return colors[category] || 'bg-slate-500/20 text-slate-400 border-slate-500/30';
 }
 
-// Searchable Item Combobox Component
-function ItemCombobox({ items, value, onSelect, category }) {
+// Searchable Item Combobox Component with Stock Status
+function ItemCombobox({ items, value, onSelect, category, stockData = {} }) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -105,6 +105,7 @@ function ItemCombobox({ items, value, onSelect, category }) {
     : filteredByCategory;
   
   const selectedItem = items.find(i => i.id === value);
+  const selectedStock = selectedItem ? (stockData[selectedItem.id] || 0) : 0;
   
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -113,11 +114,22 @@ function ItemCombobox({ items, value, onSelect, category }) {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between bg-slate-700 border-slate-500 hover:bg-slate-600 text-white text-left font-normal"
+          className={`w-full justify-between bg-slate-700 border-slate-500 hover:bg-slate-600 text-white text-left font-normal ${
+            selectedItem && selectedStock === 0 ? 'border-red-500 bg-red-900/20' : ''
+          }`}
           data-testid="req-item-combobox-trigger"
         >
-          <span className="truncate">
-            {selectedItem ? `${selectedItem.name} (${selectedItem.unit})` : "Search or select item..."}
+          <span className="truncate flex items-center gap-2">
+            {selectedItem ? (
+              <>
+                {`${selectedItem.name} (${selectedItem.unit})`}
+                {selectedStock === 0 ? (
+                  <span className="text-red-400 text-xs font-semibold px-1.5 py-0.5 bg-red-600/30 rounded">OUT OF STOCK</span>
+                ) : (
+                  <span className="text-emerald-400 text-xs">[{selectedStock} available]</span>
+                )}
+              </>
+            ) : "Search or select item..."}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
         </Button>
@@ -136,34 +148,61 @@ function ItemCombobox({ items, value, onSelect, category }) {
               No items found.
             </CommandEmpty>
             <CommandGroup>
-              {filteredItems.slice(0, 50).map((item) => (
-                <CommandItem
-                  key={item.id}
-                  value={item.name}
-                  onSelect={() => {
-                    onSelect(item.id);
-                    setOpen(false);
-                    setSearchQuery('');
-                  }}
-                  className="cursor-pointer hover:bg-emerald-600 text-white data-[selected=true]:bg-emerald-600 py-2"
-                  data-testid={`req-item-option-${item.id}`}
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <Check
-                      className={`h-4 w-4 ${value === item.id ? "opacity-100 text-emerald-300" : "opacity-0"}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium">{item.name}</p>
-                      <div className="flex items-center gap-2 text-xs mt-1">
-                        <span className={`px-1.5 py-0.5 rounded border ${getCategoryColor(item.category)}`}>
-                          {item.category || 'Uncategorized'}
-                        </span>
-                        <span className="text-slate-300">{item.unit}</span>
+              {filteredItems.slice(0, 50).map((item) => {
+                const itemStock = stockData[item.id] || 0;
+                const isOutOfStock = itemStock === 0;
+                
+                return (
+                  <CommandItem
+                    key={item.id}
+                    value={item.name}
+                    onSelect={() => {
+                      if (isOutOfStock) {
+                        // Show alert for out of stock
+                        alert(`⚠️ OUT OF STOCK\n\n"${item.name}" is currently out of stock in the Main Store.\n\nPlease select a different item.`);
+                        return;
+                      }
+                      onSelect(item.id);
+                      setOpen(false);
+                      setSearchQuery('');
+                    }}
+                    className={`cursor-pointer text-white data-[selected=true]:bg-emerald-600 py-2 ${
+                      isOutOfStock 
+                        ? 'opacity-60 bg-red-900/20 hover:bg-red-900/30' 
+                        : 'hover:bg-emerald-600'
+                    }`}
+                    data-testid={`req-item-option-${item.id}`}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      {isOutOfStock ? (
+                        <XCircle className="h-4 w-4 text-red-400" />
+                      ) : (
+                        <Check
+                          className={`h-4 w-4 ${value === item.id ? "opacity-100 text-emerald-300" : "opacity-0"}`}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className={`truncate text-sm font-medium ${isOutOfStock ? 'text-slate-400 line-through' : ''}`}>
+                            {item.name}
+                          </p>
+                          {isOutOfStock ? (
+                            <span className="text-red-400 text-xs font-bold ml-2">OUT OF STOCK</span>
+                          ) : (
+                            <span className="text-emerald-400 text-xs ml-2">{itemStock} avail.</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs mt-1">
+                          <span className={`px-1.5 py-0.5 rounded border ${getCategoryColor(item.category)}`}>
+                            {item.category || 'Uncategorized'}
+                          </span>
+                          <span className="text-slate-300">{item.unit}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CommandItem>
-              ))}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>
@@ -181,6 +220,10 @@ export default function RequisitionsPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDispatchDialog, setShowDispatchDialog] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Stock data from main store - {item_id: available_quantity}
+  const [stockData, setStockData] = useState({});
+  const [loadingStock, setLoadingStock] = useState(false);
   
   // Create form
   const [reqItems, setReqItems] = useState([{ item_id: '', quantity: '', notes: '', category: '' }]);
@@ -214,6 +257,30 @@ export default function RequisitionsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Fetch main store stock data for requisition creation
+  const fetchStockData = async () => {
+    try {
+      setLoadingStock(true);
+      const response = await api.get('/api/stock/current');
+      // Convert to lookup object {item_id: current_stock}
+      const stockLookup = {};
+      response.data.forEach(item => {
+        stockLookup[item.item_id] = item.current_stock || 0;
+      });
+      setStockData(stockLookup);
+    } catch (error) {
+      console.error('Error fetching stock data:', error);
+    } finally {
+      setLoadingStock(false);
+    }
+  };
+
+  // Open create dialog and fetch stock data
+  const openCreateDialog = () => {
+    setShowCreateDialog(true);
+    fetchStockData(); // Fetch latest stock when opening dialog
+  };
 
   // Delete single requisition (admin only)
   const deleteRequisition = async (req) => {
@@ -267,6 +334,33 @@ export default function RequisitionsPage() {
 
   const updateReqItem = (index, field, value) => {
     const updated = [...reqItems];
+    
+    // If updating quantity, check against available stock
+    if (field === 'quantity' && updated[index].item_id) {
+      const itemId = updated[index].item_id;
+      const availableStock = stockData[itemId] || 0;
+      const requestedQty = parseFloat(value) || 0;
+      
+      if (availableStock === 0) {
+        alert(`⚠️ OUT OF STOCK\n\nThis item is currently out of stock in the Main Store.\n\nPlease select a different item.`);
+        return;
+      }
+      
+      if (requestedQty > availableStock) {
+        alert(`⚠️ INSUFFICIENT STOCK\n\nRequested: ${requestedQty}\nAvailable: ${availableStock}\n\nQuantity has been adjusted to the maximum available.`);
+        value = availableStock;
+      }
+    }
+    
+    // If selecting an item, check if it's out of stock
+    if (field === 'item_id' && value) {
+      const availableStock = stockData[value] || 0;
+      if (availableStock === 0) {
+        alert(`⚠️ OUT OF STOCK\n\nThis item is currently out of stock in the Main Store.\n\nPlease select a different item.`);
+        return; // Don't allow selecting out of stock items
+      }
+    }
+    
     updated[index][field] = value;
     setReqItems(updated);
   };
@@ -278,6 +372,33 @@ export default function RequisitionsPage() {
     if (validItems.length === 0) {
       alert('Please add at least one item');
       return;
+    }
+
+    // Final stock validation before submitting
+    const outOfStockItems = [];
+    const insufficientStockItems = [];
+    
+    for (const item of validItems) {
+      const availableStock = stockData[item.item_id] || 0;
+      const requestedQty = parseFloat(item.quantity);
+      const itemInfo = items.find(i => i.id === item.item_id);
+      const itemName = itemInfo ? itemInfo.name : 'Unknown Item';
+      
+      if (availableStock === 0) {
+        outOfStockItems.push(itemName);
+      } else if (requestedQty > availableStock) {
+        insufficientStockItems.push(`${itemName}: Requested ${requestedQty}, Available ${availableStock}`);
+      }
+    }
+    
+    if (outOfStockItems.length > 0) {
+      alert(`⚠️ OUT OF STOCK ITEMS\n\nThe following items are out of stock:\n\n${outOfStockItems.join('\n')}\n\nPlease remove them from your requisition.`);
+      return;
+    }
+    
+    if (insufficientStockItems.length > 0) {
+      const proceed = window.confirm(`⚠️ INSUFFICIENT STOCK\n\nThe following items have less stock than requested:\n\n${insufficientStockItems.join('\n')}\n\nDo you want to proceed anyway? The store may dispatch a partial quantity.`);
+      if (!proceed) return;
     }
 
     try {
@@ -465,7 +586,7 @@ export default function RequisitionsPage() {
         
         {isKitchen && (
           <Button
-            onClick={() => setShowCreateDialog(true)}
+            onClick={openCreateDialog}
             className="bg-blue-600 hover:bg-blue-500"
             data-testid="create-requisition-btn"
           >
@@ -704,10 +825,20 @@ export default function RequisitionsPage() {
             </DialogTitle>
           </DialogHeader>
 
+          {/* Stock Loading Indicator */}
+          {loadingStock && (
+            <div className="text-center py-2 text-sm text-blue-400 bg-blue-900/20 rounded">
+              <span className="animate-pulse">Loading stock availability...</span>
+            </div>
+          )}
+
           <form onSubmit={handleCreateRequisition} className="space-y-4">
             {/* Items */}
             <div className="space-y-3">
-              <Label className="text-slate-300">Items Needed</Label>
+              <Label className="text-slate-300 flex items-center gap-2">
+                Items Needed
+                <span className="text-xs text-slate-500 font-normal">(Stock shown in green)</span>
+              </Label>
               {reqItems.map((item, idx) => {
                 const selectedItem = items.find(i => i.id === item.item_id);
                 return (
@@ -746,28 +877,54 @@ export default function RequisitionsPage() {
                           value={item.item_id}
                           onSelect={(itemId) => updateReqItem(idx, 'item_id', itemId)}
                           category={item.category}
+                          stockData={stockData}
                         />
                       </div>
                     </div>
                     
-                    {/* Show selected item info */}
+                    {/* Show selected item info with stock status */}
                     {selectedItem && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className={`px-2 py-1 rounded-full border ${getCategoryColor(selectedItem.category)}`}>
-                          {selectedItem.category}
-                        </span>
-                        <span className="text-slate-500">Unit: {selectedItem.unit}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`px-2 py-1 rounded-full border ${getCategoryColor(selectedItem.category)}`}>
+                            {selectedItem.category}
+                          </span>
+                          <span className="text-slate-500">Unit: {selectedItem.unit}</span>
+                        </div>
+                        {/* Stock indicator */}
+                        <div className="text-xs">
+                          {stockData[selectedItem.id] === 0 ? (
+                            <span className="text-red-400 font-semibold flex items-center gap-1">
+                              <AlertOctagon className="w-3 h-3" />
+                              OUT OF STOCK
+                            </span>
+                          ) : stockData[selectedItem.id] !== undefined ? (
+                            <span className={`font-medium ${
+                              stockData[selectedItem.id] < 10 ? 'text-amber-400' : 'text-emerald-400'
+                            }`}>
+                              {stockData[selectedItem.id]} available in store
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">Checking stock...</span>
+                          )}
+                        </div>
                       </div>
                     )}
                     
                     {/* Quantity Row */}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Quantity:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-400">Quantity:</span>
+                        {selectedItem && stockData[selectedItem.id] > 0 && (
+                          <span className="text-xs text-slate-500">(max: {stockData[selectedItem.id]})</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <QuantityToggle
                           value={item.quantity}
                           onChange={(val) => updateReqItem(idx, 'quantity', val)}
                           min={0}
+                          max={selectedItem ? (stockData[selectedItem.id] || 9999) : 9999}
                           step={1}
                         />
                         {reqItems.length > 1 && (
@@ -783,6 +940,14 @@ export default function RequisitionsPage() {
                         )}
                       </div>
                     </div>
+                    
+                    {/* Warning if quantity exceeds stock */}
+                    {selectedItem && item.quantity && parseFloat(item.quantity) > (stockData[selectedItem.id] || 0) && stockData[selectedItem.id] !== undefined && (
+                      <div className="text-xs text-amber-400 flex items-center gap-1 bg-amber-900/20 px-2 py-1 rounded">
+                        <AlertTriangle className="w-3 h-3" />
+                        Requested qty exceeds available stock ({stockData[selectedItem.id]} available)
+                      </div>
+                    )}
                   </div>
                 );
               })}
