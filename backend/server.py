@@ -3910,6 +3910,26 @@ async def download_opening_stock_template():
         headers={"Content-Disposition": "attachment; filename=opening_stock_template.xlsx"}
     )
 
+@app.delete("/api/stock/lots/clear-all")
+async def clear_all_lots(
+    current_user = Depends(require_role(["admin"]))
+):
+    """
+    Clear all lots from the database. Admin only.
+    Use this before uploading fresh opening stock.
+    """
+    try:
+        count_before = lots_collection.count_documents({})
+        result = lots_collection.delete_many({})
+        return {
+            "message": f"Successfully cleared all lots",
+            "deleted_count": result.deleted_count,
+            "lots_before": count_before,
+            "lots_after": 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear lots: {str(e)}")
+
 @app.post("/api/stock/opening/upload")
 async def upload_opening_stock(
     file: UploadFile = File(...),
