@@ -137,8 +137,27 @@ Set up DREAMOVEN Inventory Management System with:
 - Admin User: parveenkatyal2312@gmail.com / admin@123
 - 15 Locations (Main Store + 14 kitchens)
 - 69 Vendors
-- 797 Items
+- 1353 Items (after Excel stock upload and duplicate cleanup)
+- 446 Lots (stock tracking records)
 - 14 Categories
+
+## Recent Updates (March 23, 2026)
+
+### Stock Data Fix
+- **Issue**: Categories (Bakery, Indian Grocery, Seafood, Beverage) were showing 0 stock after Excel upload
+- **Root Cause**: Item name mismatches between Excel file and seeded items created duplicates, with lots pointing to wrong items
+- **Fix**: Cleaned up 2 duplicate item groups, merged lots to correct original items
+- **Result**: All categories now show correct stock:
+  - Bakery: 575 units (17 items with stock)
+  - Indian Grocery: 2863.5 units (109 items with stock)
+  - Seafood: 105 units (10 items with stock)
+  - Beverage: 1873.5 units (36 items with stock)
+
+### GRN Photo Upload to Cloudflare R2
+- **Updated**: GRNPage.jsx now uploads photos to Cloudflare R2 instead of storing base64 in MongoDB
+- **Endpoint**: POST /api/upload/base64
+- **Storage**: dreamoven-storage bucket
+- **Public URL**: https://pub-cd0157ddd3e442bd9e2313f13cb121f5.r2.dev
 
 ## Kitchen List
 1. Main Store (MAIN)
@@ -172,11 +191,13 @@ Set up DREAMOVEN Inventory Management System with:
 ### P1 (Important) - Partial
 - ✅ Stock tracking per kitchen
 - ✅ Low stock alerts
+- ✅ Stock data upload from Excel (completed with duplicate cleanup)
+- ✅ GRN photo upload to Cloudflare R2
 - 🔄 Bulk item import/export (UI buttons exist)
-- 🔄 5-step GRN workflow (basic 1-step implemented)
+- 🔄 5-step GRN workflow (basic implementation with photo capture)
 
 ### P2 (Nice to Have)
-- User role-based access control
+- ✅ User role-based access control (Admin, Main Store, Kitchen)
 - PDF generation for POs
 - Email sending for POs
 - WhatsApp integration
