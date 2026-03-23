@@ -560,6 +560,41 @@ export default function GRNPage() {
       
       const { totalAmount } = calculateTotals();
       
+      // Upload photos to R2 storage first
+      let uploadedPhotoUrls = [];
+      let primaryPhotoUrl = null;
+      
+      if (capturedPhotos.length > 0) {
+        console.log(`Uploading ${capturedPhotos.length} photos to R2...`);
+        
+        for (const photo of capturedPhotos) {
+          try {
+            const formData = new FormData();
+            formData.append('image_data', photo.data);
+            formData.append('folder', 'grn-photos');
+            
+            const uploadRes = await api.post('/api/upload/base64', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            if (uploadRes.data?.url) {
+              uploadedPhotoUrls.push({
+                url: uploadRes.data.url,
+                key: uploadRes.data.key,
+                timestamp: photo.timestamp
+              });
+              if (!primaryPhotoUrl) {
+                primaryPhotoUrl = uploadRes.data.url;
+              }
+              console.log('Photo uploaded:', uploadRes.data.url);
+            }
+          } catch (uploadError) {
+            console.error('Failed to upload photo:', uploadError);
+            // Continue with other photos even if one fails
+          }
+        }
+      }
+      
       const payload = {
         po_id: selectedPO.id,
         vendor_id: poVendorId,
@@ -578,9 +613,9 @@ export default function GRNPage() {
           status: item.status,
           price_variance: item.price_variance
         })),
-        // Photo verification data - supports multiple photos (up to 6)
-        verification_photo: capturedPhotos.length > 0 ? capturedPhotos[0].data : null, // First photo for backwards compatibility
-        verification_photos: capturedPhotos.map(p => ({ data: p.data, timestamp: p.timestamp })), // All photos
+        // Photo verification data - now using R2 URLs instead of base64
+        verification_photo: primaryPhotoUrl, // URL for backwards compatibility
+        verification_photos: uploadedPhotoUrls, // Array of URL objects
         gps_location: gpsLocation || null,
         capture_time: captureTime || null
       };
