@@ -7,7 +7,7 @@ import requests
 import os
 import base64
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stock-management-app-3.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://atlas-db-deploy.preview.emergentagent.com')
 
 # Test credentials
 ADMIN_EMAIL = "parveenkatyal2312@gmail.com"
