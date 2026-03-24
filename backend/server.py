@@ -6690,11 +6690,15 @@ async def create_grn_from_po(data: POGRNCreate):
         photos_to_store = data.verification_photos[:6]  # Max 6 photos
     elif data.verification_photo:
         # Backwards compatibility - single photo
-        photos_to_store = [{"data": data.verification_photo, "timestamp": data.capture_time}]
+        photos_to_store = [{"data": data.verification_photo, "url": data.verification_photo, "timestamp": data.capture_time}]
     
     if photos_to_store:
+        # Extract first photo URL - handle both 'data' (legacy base64) and 'url' (R2 URL) formats
+        first_photo = photos_to_store[0]
+        first_photo_url = first_photo.get("url") or first_photo.get("data") or None
+        
         verification_data = {
-            "photo": photos_to_store[0]["data"] if photos_to_store else None,  # First photo for backwards compat
+            "photo": first_photo_url,  # First photo URL for backwards compat
             "photos": photos_to_store,  # All photos
             "photo_count": len(photos_to_store),
             "gps_location": {
