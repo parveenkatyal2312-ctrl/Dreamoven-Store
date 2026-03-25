@@ -2091,11 +2091,11 @@ async def get_challan_pdf(req_id: str):
     
     # Get company settings
     company = company_settings_collection.find_one({}) or {
-        "name": "Kinfolkmagic Hospitality LLP",
+        "name": "Dreamoven",
         "address": "Main Store Address",
         "phone": "",
         "email": "",
-        "gst_number": ""
+        "gst_number": "07AGSPA1692G1ZB"
     }
     
     # Get main store details
@@ -5269,11 +5269,11 @@ async def get_po_pdf(po_id: str):
     
     # Get company settings
     company = company_settings_collection.find_one({}) or {
-        "name": "Kinfolkmagic Hospitality LLP",
+        "name": "Dreamoven",
         "address": "Main Store Address",
         "phone": "",
         "email": "",
-        "gst_number": ""
+        "gst_number": "07AGSPA1692G1ZB"
     }
     
     buffer = io.BytesIO()
