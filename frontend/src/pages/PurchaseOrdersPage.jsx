@@ -1550,14 +1550,14 @@ export default function PurchaseOrdersPage() {
                           key={index}
                           className="relative cursor-pointer group"
                           onClick={() => setShowPhotoDialog({ 
-                            photo: photo.data || photo, 
+                            photo: photo.url || photo.data || photo, 
                             index, 
                             total: showDetailsDialog.grn_verification.photos.length,
                             allPhotos: showDetailsDialog.grn_verification.photos
                           })}
                         >
                           <img 
-                            src={photo.data || photo} 
+                            src={photo.url || photo.data || photo} 
                             alt={`GRN Photo ${index + 1}`} 
                             className="w-full h-32 object-cover rounded-lg border border-slate-700"
                           />
@@ -1599,48 +1599,9 @@ export default function PurchaseOrdersPage() {
                       </div>
                       {showDetailsDialog.grn_verification.has_photos && (
                         <p className="text-amber-300/70 text-sm">
-                          {showDetailsDialog.grn_verification.photo_count || 0} photo(s) were captured but not synced to server. 
+                          {showDetailsDialog.grn_verification.photo_count || 0} photo(s) were captured but may not have synced properly. 
                         </p>
                       )}
-                      
-                      {/* Fetch from Kitchen App buttons */}
-                      <div className="flex flex-col gap-2 pt-2">
-                        <p className="text-slate-400 text-xs">
-                          Photo may exist in the Kitchen App. Try fetching it:
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => fetchPhotoFromKitchenApp(showDetailsDialog.po_number)}
-                            disabled={fetchingPhoto}
-                            className="flex-1 border-blue-500/50 text-blue-400 hover:bg-blue-600/20"
-                            data-testid="fetch-photo-btn"
-                          >
-                            {fetchingPhoto ? (
-                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <CloudDownload className="w-4 h-4 mr-2" />
-                            )}
-                            {fetchingPhoto ? 'Fetching...' : 'View from Kitchen App'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => syncPhotoFromKitchenApp(showDetailsDialog.id, showDetailsDialog.po_number)}
-                            disabled={fetchingPhoto}
-                            className="flex-1 border-emerald-500/50 text-emerald-400 hover:bg-emerald-600/20"
-                            data-testid="sync-photo-btn"
-                          >
-                            {fetchingPhoto ? (
-                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <Download className="w-4 h-4 mr-2" />
-                            )}
-                            {fetchingPhoto ? 'Syncing...' : 'Sync & Save Photo'}
-                          </Button>
-                        </div>
-                      </div>
                     </div>
                   )}
                   
@@ -1699,31 +1660,16 @@ export default function PurchaseOrdersPage() {
                 </div>
               )}
 
-              {/* Show "Fetch Photo" option for received POs without GRN verification data */}
+              {/* Show message for received POs without GRN verification data */}
               {(showDetailsDialog.status === 'received' || showDetailsDialog.status === 'partial') && !showDetailsDialog.grn_verification && (
-                <div className="p-4 rounded-xl bg-amber-600/10 border border-amber-500/30 space-y-3">
+                <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600 space-y-3">
                   <div className="flex items-center gap-2">
-                    <Camera className="w-5 h-5 text-amber-400" />
-                    <Label className="text-amber-300 font-medium">GRN Verification</Label>
+                    <Camera className="w-5 h-5 text-slate-400" />
+                    <Label className="text-slate-300 font-medium">GRN Verification</Label>
                   </div>
                   <p className="text-slate-400 text-sm">
-                    No GRN verification data found locally. The photo may exist in the Kitchen App.
+                    No GRN verification photo was captured for this order.
                   </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => fetchPhotoFromKitchenApp(showDetailsDialog.po_number)}
-                    disabled={fetchingPhoto}
-                    className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-600/20"
-                    data-testid="fetch-photo-no-grn-btn"
-                  >
-                    {fetchingPhoto ? (
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <CloudDownload className="w-4 h-4 mr-2" />
-                    )}
-                    {fetchingPhoto ? 'Fetching...' : 'Fetch Photo from Kitchen App'}
-                  </Button>
                 </div>
               )}
 
@@ -1810,7 +1756,7 @@ export default function PurchaseOrdersPage() {
                   {showPhotoDialog.allPhotos.map((photo, idx) => (
                     <img
                       key={idx}
-                      src={photo.data || photo}
+                      src={photo.url || photo.data || photo}
                       alt={`Photo ${idx + 1}`}
                       className={`w-16 h-16 object-cover rounded cursor-pointer border-2 flex-shrink-0 ${
                         idx === showPhotoDialog.index ? 'border-blue-500' : 'border-slate-700'
@@ -1818,7 +1764,7 @@ export default function PurchaseOrdersPage() {
                       onClick={() => setShowPhotoDialog(prev => ({
                         ...prev,
                         index: idx,
-                        photo: photo.data || photo
+                        photo: photo.url || photo.data || photo
                       }))}
                     />
                   ))}
