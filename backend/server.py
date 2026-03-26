@@ -7371,7 +7371,15 @@ async def export_stock_mainstore_excel():
     except:
         pass
     
-    # Skip PO vendor lookup to avoid timeouts - use direct vendor_id instead
+    # OPTIMIZATION: Batch fetch all items at once
+    all_item_ids = list(set(str(lot.get("item_id", "")) for lot in lots if lot.get("item_id")))
+    all_items = {}
+    if all_item_ids:
+        try:
+            items_data = list(items_collection.find({"_id": {"$in": [ObjectId(i) for i in all_item_ids]}}))
+            all_items = {str(item["_id"]): item for item in items_data}
+        except:
+            pass
     
     # AGGREGATE by item_id - combine all lots of same item
     item_aggregates = {}
@@ -7382,10 +7390,7 @@ async def export_stock_mainstore_excel():
             if not item_id:
                 continue
             
-            try:
-                item = items_collection.find_one({"_id": ObjectId(item_id)})
-            except:
-                continue
+            item = all_items.get(item_id)
             if not item:
                 continue
             
