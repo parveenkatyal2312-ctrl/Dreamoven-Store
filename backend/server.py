@@ -7226,6 +7226,10 @@ async def get_stock_in_hand_report():
         "current_quantity": {"$gt": 0}
     }))
     
+    # OPTIMIZATION: Fetch all items at once instead of individual queries
+    all_item_ids = list(set(str(lot.get("item_id", "")) for lot in lots if lot.get("item_id")))
+    all_items = {str(item["_id"]): item for item in items_collection.find({"_id": {"$in": [ObjectId(i) for i in all_item_ids if i]}})}
+    
     # AGGREGATE by item_id - combine all lots of same item
     item_aggregates = {}
     
@@ -7234,7 +7238,7 @@ async def get_stock_in_hand_report():
         if not item_id:
             continue
             
-        item = items_collection.find_one({"_id": ObjectId(item_id)})
+        item = all_items.get(item_id)
         if not item:
             continue
         
@@ -10774,19 +10778,33 @@ async def get_kitchen_ledger(
             total_requisition_value = 0
             total_requisition_qty = 0
             
+            # OPTIMIZATION: Batch fetch all items from requisitions
+            all_req_item_ids = []
+            for req in requisitions:
+                for item in req.get("items", []):
+                    item_id = item.get("item_id")
+                    if item_id:
+                        all_req_item_ids.append(item_id)
+            
+            req_items_map = {}
+            if all_req_item_ids:
+                try:
+                    unique_ids = list(set(all_req_item_ids))
+                    items_data = list(items_collection.find(
+                        {"_id": {"$in": [ObjectId(i) for i in unique_ids[:500]]}},
+                        {"_id": 1, "standard_price": 1}
+                    ))
+                    req_items_map = {str(item["_id"]): item for item in items_data}
+                except:
+                    pass
+            
             for req in requisitions:
                 req_total = 0
                 req_qty = 0
                 for item in req.get("items", []):
                     qty = item.get("quantity_sent", 0) or item.get("quantity", 0) or 0
-                    try:
-                        item_id = item.get("item_id")
-                        if item_id:
-                            db_item = items_collection.find_one({"_id": ObjectId(item_id)})
-                        else:
-                            db_item = None
-                    except:
-                        db_item = None
+                    item_id = item.get("item_id")
+                    db_item = req_items_map.get(item_id) if item_id else None
                     rate = item.get("rate") or (db_item.get("standard_price", 0) if db_item else 0) or 0
                     req_total += (qty or 0) * (rate or 0)
                     req_qty += (qty or 0)
