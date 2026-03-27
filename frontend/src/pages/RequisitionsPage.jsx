@@ -401,9 +401,16 @@ export default function RequisitionsPage() {
       if (!proceed) return;
     }
 
+    // Prevent duplicate submissions
+    if (submitting) {
+      alert('✅ REQUISITION ALREADY SENT\n\nYour requisition is being processed. Please wait...');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await api.post('/api/requisitions', {
+      
+      const response = await api.post('/api/requisitions', {
         items: validItems.map(i => ({
           item_id: i.item_id,
           quantity: parseFloat(i.quantity),
@@ -412,6 +419,10 @@ export default function RequisitionsPage() {
         priority,
         notes: notes || null
       });
+      
+      // Show success message with requisition number
+      const reqNumber = response.data?.serial_number || response.data?.requisition_number || 'REQ';
+      alert(`✅ REQUISITION SENT SUCCESSFULLY!\n\nRequisition Number: ${reqNumber}\n\nYour request has been submitted to Main Store.`);
       
       setShowCreateDialog(false);
       setReqItems([{ item_id: '', quantity: '', notes: '' }]);
@@ -982,8 +993,12 @@ export default function RequisitionsPage() {
               />
             </div>
 
-            <Button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-500">
-              {submitting ? 'Submitting...' : 'Submit Requisition'}
+            <Button 
+              type="submit" 
+              disabled={submitting} 
+              className={`w-full ${submitting ? 'bg-emerald-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+            >
+              {submitting ? '✅ SENT - Processing...' : 'Submit Requisition'}
             </Button>
           </form>
         </DialogContent>

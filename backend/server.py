@@ -1636,6 +1636,22 @@ async def create_requisition(
     if not current_user.get("location_id"):
         raise HTTPException(status_code=400, detail="User has no assigned location")
     
+    # DUPLICATE PREVENTION: Check if similar requisition was created in last 30 seconds
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=30)
+    recent_req = requisitions_collection.find_one({
+        "kitchen_id": current_user["location_id"],
+        "created_at": {"$gte": recent_cutoff},
+        "status": "pending"
+    })
+    
+    if recent_req:
+        return {
+            "message": "Requisition already submitted! Please wait...",
+            "requisition_id": str(recent_req["_id"]),
+            "serial_number": recent_req.get("serial_number", ""),
+            "duplicate": True
+        }
+    
     # Get the user's location details
     location = locations_collection.find_one({"_id": ObjectId(current_user["location_id"])})
     location_name = location["name"] if location else "Unknown"
