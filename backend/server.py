@@ -16661,3 +16661,305 @@ async def export_daily_perishables_short(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ============================================
+# KITCHEN CLOSING STOCK FEATURE
+# ============================================
+
+@app.get("/api/reports/kitchen-closing-stock")
+async def get_kitchen_closing_stock_summary(
+    kitchen_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user = Depends(require_role(["admin", "main_store"]))
+):
+    """
+    Get summary of items dispatched to each kitchen for closing stock tracking.
+    Returns list of kitchens with their dispatched items.
+    """
+    
+    # Get all kitchens
+    kitchens = list(locations_collection.find({"type": "kitchen"}))
+    
+    # Build date query
+    date_query = {}
+    if start_date:
+        try:
+            date_query["$gte"] = datetime.strptime(start_date, "%Y-%m-%d")
+        except:
+            pass
+    if end_date:
+        try:
+            date_query["$lte"] = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        except:
+            pass
+    
+    result = []
+    
+    for kitchen in kitchens:
+        k_id = str(kitchen["_id"])
+        k_name = kitchen.get("name", "Unknown")
+        
+        if kitchen_id and k_id != kitchen_id:
+            continue
+        
+        # Get requisitions dispatched to this kitchen
+        req_query = {
+            "$or": [
+                {"kitchen_id": k_id},
+                {"location_id": kitchen["_id"]},
+                {"location_name": k_name}
+            ],
+            "status": {"$in": ["dispatched", "completed", "partial", "received"]}
+        }
+        
+        if date_query:
+            req_query["created_at"] = date_query
+        
+        requisitions = list(requisitions_collection.find(req_query))
+        
+        # Aggregate items by item_id
+        item_totals = {}
+        for req in requisitions:
+            for item in req.get("items", []):
+                qty_sent = item.get("quantity_sent", 0) or 0
+                if qty_sent <= 0:
+                    continue
+                    
+                item_id = item.get("item_id", "")
+                if item_id not in item_totals:
+                    item_totals[item_id] = {
+                        "item_id": item_id,
+                        "item_name": item.get("item_name", "Unknown"),
+                        "category": item.get("category", "Uncategorized"),
+                        "unit": item.get("unit", ""),
+                        "total_sent": 0
+                    }
+                item_totals[item_id]["total_sent"] += qty_sent
+        
+        # Sort by category and name
+        items_list = sorted(item_totals.values(), key=lambda x: (x["category"], x["item_name"]))
+        
+        result.append({
+            "kitchen_id": k_id,
+            "kitchen_name": k_name,
+            "kitchen_code": kitchen.get("code", ""),
+            "total_items": len(items_list),
+            "items": items_list
+        })
+    
+    return {
+        "kitchens": result,
+        "total_kitchens": len(result),
+        "date_range": {
+            "start": start_date,
+            "end": end_date
+        }
+    }
+
+
+@app.get("/api/export/kitchen-closing-stock")
+async def export_kitchen_closing_stock(
+    kitchen_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user = Depends(require_role(["admin", "main_store"]))
+):
+    """
+    Export Kitchen Closing Stock Excel for a specific kitchen.
+    Shows items dispatched from Main Store with empty closing stock column.
+    Organized by Category.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+    import io
+    
+    # Get kitchen details
+    try:
+        kitchen = locations_collection.find_one({"_id": ObjectId(kitchen_id)})
+    except:
+        kitchen = locations_collection.find_one({"code": kitchen_id})
+    
+    if not kitchen:
+        raise HTTPException(status_code=404, detail="Kitchen not found")
+    
+    k_name = kitchen.get("name", "Unknown")
+    k_code = kitchen.get("code", "")
+    
+    # Build date query
+    date_query = {}
+    if start_date:
+        try:
+            date_query["$gte"] = datetime.strptime(start_date, "%Y-%m-%d")
+        except:
+            pass
+    if end_date:
+        try:
+            date_query["$lte"] = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        except:
+            pass
+    
+    # Get requisitions dispatched to this kitchen
+    req_query = {
+        "$or": [
+            {"kitchen_id": kitchen_id},
+            {"location_id": kitchen["_id"]},
+            {"location_name": k_name}
+        ],
+        "status": {"$in": ["dispatched", "completed", "partial", "received"]}
+    }
+    
+    if date_query:
+        req_query["created_at"] = date_query
+    
+    requisitions = list(requisitions_collection.find(req_query))
+    
+    # Aggregate items by category and item_id
+    category_items = {}
+    
+    for req in requisitions:
+        for item in req.get("items", []):
+            qty_sent = item.get("quantity_sent", 0) or 0
+            if qty_sent <= 0:
+                continue
+            
+            item_id = item.get("item_id", "")
+            category = item.get("category", "Uncategorized") or "Uncategorized"
+            
+            if category not in category_items:
+                category_items[category] = {}
+            
+            if item_id not in category_items[category]:
+                category_items[category][item_id] = {
+                    "item_name": item.get("item_name", "Unknown"),
+                    "unit": item.get("unit", ""),
+                    "total_sent": 0
+                }
+            
+            category_items[category][item_id]["total_sent"] += qty_sent
+    
+    # Create Excel workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Closing Stock"
+    
+    # Styles
+    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, size=11)
+    category_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    category_font = Font(bold=True, size=11, color="1F4E79")
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Title
+    date_range_str = ""
+    if start_date and end_date:
+        date_range_str = f" ({start_date} to {end_date})"
+    elif start_date:
+        date_range_str = f" (From {start_date})"
+    elif end_date:
+        date_range_str = f" (Until {end_date})"
+    
+    ws.merge_cells('A1:E1')
+    ws['A1'] = f"CLOSING STOCK - {k_name} ({k_code}){date_range_str}"
+    ws['A1'].font = Font(bold=True, size=14, color="1F4E79")
+    ws['A1'].alignment = Alignment(horizontal='center')
+    
+    ws.merge_cells('A2:E2')
+    ws['A2'] = "Please fill the 'Closing Stock' column with your current inventory"
+    ws['A2'].font = Font(italic=True, size=10, color="666666")
+    ws['A2'].alignment = Alignment(horizontal='center')
+    
+    # Headers
+    headers = ["S.No", "Item Name", "Unit", "Opening Stock (Sent)", "Closing Stock"]
+    row = 4
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    
+    row += 1
+    serial = 1
+    
+    # Sort categories
+    for category in sorted(category_items.keys()):
+        items = category_items[category]
+        
+        # Category header
+        ws.merge_cells(f'A{row}:E{row}')
+        ws[f'A{row}'] = f"📦 {category}"
+        ws[f'A{row}'].fill = category_fill
+        ws[f'A{row}'].font = category_font
+        ws[f'A{row}'].alignment = Alignment(horizontal='left')
+        row += 1
+        
+        # Sort items by name
+        for item_id, item_data in sorted(items.items(), key=lambda x: x[1]["item_name"]):
+            ws.cell(row=row, column=1, value=serial).border = thin_border
+            ws.cell(row=row, column=2, value=item_data["item_name"]).border = thin_border
+            ws.cell(row=row, column=3, value=item_data["unit"]).border = thin_border
+            ws.cell(row=row, column=4, value=round(item_data["total_sent"], 2)).border = thin_border
+            
+            # Empty closing stock cell (highlighted for user input)
+            closing_cell = ws.cell(row=row, column=5, value="")
+            closing_cell.border = thin_border
+            closing_cell.fill = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
+            
+            serial += 1
+            row += 1
+        
+        # Empty row after category
+        row += 1
+    
+    # Add totals row
+    row += 1
+    ws.cell(row=row, column=1, value="TOTAL ITEMS:")
+    ws.cell(row=row, column=2, value=serial - 1)
+    ws[f'A{row}'].font = Font(bold=True)
+    ws[f'B{row}'].font = Font(bold=True)
+    
+    # Column widths
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 40
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 20
+    ws.column_dimensions['E'].width = 20
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    today = datetime.now().strftime("%Y%m%d")
+    filename = f"Closing_Stock_{k_code}_{today}.xlsx"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/api/kitchens/list")
+async def get_kitchens_list(
+    current_user = Depends(require_role(["admin", "main_store"]))
+):
+    """Get list of all kitchens for dropdown selection"""
+    kitchens = list(locations_collection.find({"type": "kitchen"}))
+    return [
+        {
+            "id": str(k["_id"]),
+            "name": k.get("name", "Unknown"),
+            "code": k.get("code", "")
+        }
+        for k in sorted(kitchens, key=lambda x: x.get("name", ""))
+    ]

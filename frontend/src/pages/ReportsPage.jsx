@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, Download, Calendar, Package, Building2, Store, ChevronDown, ChevronUp, FileSpreadsheet, Camera, MapPin, Clock, Image, Warehouse, TrendingUp, Check } from 'lucide-react';
+import { BarChart3, Download, Calendar, Package, Building2, Store, ChevronDown, ChevronUp, FileSpreadsheet, Camera, MapPin, Clock, Image, Warehouse, TrendingUp, Check, ClipboardList } from 'lucide-react';
 import { getLocations, getItems, getVendorLedger, getKitchenLedger } from '../lib/api';
 import { getVendors } from '../lib/api';
 import api from '../lib/api';
@@ -32,6 +32,8 @@ export default function ReportsPage() {
   const [expandedPerishableVendors, setExpandedPerishableVendors] = useState({});
   const [expandedPerishableKitchens, setExpandedPerishableKitchens] = useState({});
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [closingStockKitchens, setClosingStockKitchens] = useState([]);
+  const [selectedClosingStockKitchen, setSelectedClosingStockKitchen] = useState('');
   
   // Filters
   const [filters, setFilters] = useState({
@@ -55,6 +57,7 @@ export default function ReportsPage() {
         ]);
         setLocations(locsRes.data);
         setKitchens(locsRes.data.filter(l => l.type === 'kitchen'));
+        setClosingStockKitchens(locsRes.data.filter(l => l.type === 'kitchen'));
         setItems(itemsRes.data);
         setVendors(vendorsRes.data);
       } catch (error) {
@@ -63,6 +66,42 @@ export default function ReportsPage() {
     };
     fetchMasterData();
   }, []);
+
+  // Download Kitchen Closing Stock Excel
+  const downloadClosingStockExcel = async (kitchenId) => {
+    if (!kitchenId) {
+      alert('Please select a kitchen');
+      return;
+    }
+    
+    try {
+      setDownloading(true);
+      const params = new URLSearchParams();
+      if (filters.start_date) params.append('start_date', filters.start_date);
+      if (filters.end_date) params.append('end_date', filters.end_date);
+      
+      const response = await api.get(`/api/export/kitchen-closing-stock?kitchen_id=${kitchenId}&${params.toString()}`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const kitchen = closingStockKitchens.find(k => k.id === kitchenId);
+      const kitchenCode = kitchen?.code || kitchenId;
+      const today = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `Closing_Stock_${kitchenCode}_${today}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Error downloading file');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const loadReport = async () => {
     setLoading(true);
@@ -408,6 +447,10 @@ export default function ReportsPage() {
           <TabsTrigger value="outlet-wise" className="data-[state=active]:bg-pink-600" data-testid="outlet-wise-tab">
             <MapPin className="w-4 h-4 mr-2" />
             Outlet-wise Analysis
+          </TabsTrigger>
+          <TabsTrigger value="closing-stock" className="data-[state=active]:bg-amber-600" data-testid="closing-stock-tab">
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Kitchen Closing Stock
           </TabsTrigger>
         </TabsList>
 
@@ -2090,6 +2133,105 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-500 mt-1">Shows which outlets are receiving without PO, quantities per outlet, and GRN status</p>
             </div>
           )}
+        </TabsContent>
+
+        {/* ============ KITCHEN CLOSING STOCK ============ */}
+        <TabsContent value="closing-stock" className="space-y-4" data-testid="closing-stock-content">
+          <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <ClipboardList className="w-6 h-6 text-amber-400" />
+                Kitchen Closing Stock
+              </h2>
+              <p className="text-slate-400 mt-1">
+                Download Excel sheets for each kitchen to track closing inventory. 
+                Only items dispatched from Main Store are included.
+              </p>
+            </div>
+
+            {/* Date Range Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Start Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={filters.start_date}
+                  onChange={(e) => setFilters(prev => ({ ...prev, start_date: e.target.value }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-300">End Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={filters.end_date}
+                  onChange={(e) => setFilters(prev => ({ ...prev, end_date: e.target.value }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+              </div>
+              <div className="flex items-end">
+                <p className="text-sm text-slate-500">
+                  Leave dates empty to include all dispatched items
+                </p>
+              </div>
+            </div>
+
+            {/* Kitchen Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {closingStockKitchens.map((kitchen) => (
+                <div 
+                  key={kitchen.id}
+                  className="bg-slate-800/50 rounded-xl border border-slate-700 p-4 hover:border-amber-500/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-white font-medium">{kitchen.name}</h3>
+                      <p className="text-slate-400 text-sm">{kitchen.code}</p>
+                    </div>
+                    <Store className="w-8 h-8 text-amber-400/50" />
+                  </div>
+                  
+                  <Button
+                    onClick={() => downloadClosingStockExcel(kitchen.id)}
+                    disabled={downloading}
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-white"
+                    data-testid={`download-closing-stock-${kitchen.code}`}
+                  >
+                    {downloading ? (
+                      <>
+                        <Download className="w-4 h-4 mr-2 animate-bounce" />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        Download Excel
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {closingStockKitchens.length === 0 && (
+              <div className="text-center py-12">
+                <Store className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No kitchens found</p>
+              </div>
+            )}
+
+            {/* Instructions */}
+            <div className="mt-6 p-4 bg-amber-500/10 rounded-xl border border-amber-500/30">
+              <h4 className="text-amber-300 font-medium mb-2">📋 How to use:</h4>
+              <ol className="text-slate-300 text-sm space-y-1 list-decimal list-inside">
+                <li>Download the Excel file for the specific kitchen</li>
+                <li>The sheet shows all items sent to that kitchen from Main Store</li>
+                <li>Items are organized by category for easy reference</li>
+                <li>Kitchen staff fills the <span className="text-amber-300 font-medium">"Closing Stock"</span> column (highlighted in yellow)</li>
+                <li>Calculate consumption: <span className="text-emerald-300">Opening Stock - Closing Stock = Consumption</span></li>
+              </ol>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
       
