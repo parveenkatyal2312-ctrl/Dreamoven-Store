@@ -4716,7 +4716,7 @@ async def delete_vendor(vendor_id: str):
     return {"message": "Vendor deleted successfully"}
 
 @app.get("/api/vendors/{vendor_id}/items")
-async def get_vendor_items(vendor_id: str):
+async def get_vendor_items(vendor_id: str, search: Optional[str] = None):
     """Get items associated with this vendor (supports multiple vendor associations)"""
     vendor = vendors_collection.find_one({"_id": ObjectId(vendor_id)})
     if not vendor:
@@ -4737,15 +4737,31 @@ async def get_vendor_items(vendor_id: str):
     if supply_categories:
         query["$or"].append({"category": {"$in": supply_categories}})
     
-    items = list(items_collection.find(query).sort("name", 1).limit(500))
+    # Add search filter if provided
+    if search and len(search) >= 2:
+        query = {
+            "$and": [
+                query,
+                {"name": {"$regex": search, "$options": "i"}}
+            ]
+        }
     
-    # If no items found with vendor association, return items from supply categories only (limited)
+    # Increase limit to get all relevant items
+    items = list(items_collection.find(query).sort("name", 1).limit(1000))
+    
+    # If no items found with vendor association, return items from supply categories only
     if not items and supply_categories:
-        items = list(items_collection.find({"category": {"$in": supply_categories}}).sort("name", 1).limit(500))
+        cat_query = {"category": {"$in": supply_categories}}
+        if search and len(search) >= 2:
+            cat_query["name"] = {"$regex": search, "$options": "i"}
+        items = list(items_collection.find(cat_query).sort("name", 1).limit(1000))
     
     # Final fallback: return limited items (not all)
     if not items:
-        items = list(items_collection.find().sort("name", 1).limit(200))
+        fallback_query = {}
+        if search and len(search) >= 2:
+            fallback_query["name"] = {"$regex": search, "$options": "i"}
+        items = list(items_collection.find(fallback_query).sort("name", 1).limit(200))
     
     return [{
         "id": str(item["_id"]),
