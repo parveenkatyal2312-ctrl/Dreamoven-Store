@@ -16817,6 +16817,25 @@ async def export_kitchen_closing_stock(
     
     requisitions = list(requisitions_collection.find(req_query))
     
+    # OPTIMIZATION: Batch fetch all items to get prices
+    all_item_ids = set()
+    for req in requisitions:
+        for item in req.get("items", []):
+            item_id = item.get("item_id", "")
+            if item_id:
+                all_item_ids.add(item_id)
+    
+    items_price_map = {}
+    if all_item_ids:
+        try:
+            items_data = list(items_collection.find(
+                {"_id": {"$in": [ObjectId(i) for i in all_item_ids]}},
+                {"_id": 1, "standard_price": 1}
+            ))
+            items_price_map = {str(item["_id"]): float(item.get("standard_price", 0) or 0) for item in items_data}
+        except:
+            pass
+    
     # Aggregate items by category and item_id
     category_items = {}
     
@@ -16833,9 +16852,12 @@ async def export_kitchen_closing_stock(
                 category_items[category] = {}
             
             if item_id not in category_items[category]:
+                # Get price from items collection
+                price = items_price_map.get(item_id, 0)
                 category_items[category][item_id] = {
                     "item_name": item.get("item_name", "Unknown"),
                     "unit": item.get("unit", ""),
+                    "price": price,
                     "total_sent": 0
                 }
             
@@ -16867,18 +16889,18 @@ async def export_kitchen_closing_stock(
     elif end_date:
         date_range_str = f" (Until {end_date})"
     
-    ws.merge_cells('A1:E1')
+    ws.merge_cells('A1:G1')
     ws['A1'] = f"CLOSING STOCK - {k_name} ({k_code}){date_range_str}"
     ws['A1'].font = Font(bold=True, size=14, color="1F4E79")
     ws['A1'].alignment = Alignment(horizontal='center')
     
-    ws.merge_cells('A2:E2')
+    ws.merge_cells('A2:G2')
     ws['A2'] = "Please fill the 'Closing Stock' column with your current inventory"
     ws['A2'].font = Font(italic=True, size=10, color="666666")
     ws['A2'].alignment = Alignment(horizontal='center')
     
     # Headers
-    headers = ["S.No", "Item Name", "Unit", "Opening Stock (Sent)", "Closing Stock"]
+    headers = ["S.No", "Item Name", "Unit", "Rate (₹)", "Opening Stock (Sent)", "Closing Stock", "Value (₹)"]
     row = 4
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=row, column=col, value=header)
@@ -16895,7 +16917,7 @@ async def export_kitchen_closing_stock(
         items = category_items[category]
         
         # Category header
-        ws.merge_cells(f'A{row}:E{row}')
+        ws.merge_cells(f'A{row}:G{row}')
         ws[f'A{row}'] = f"📦 {category}"
         ws[f'A{row}'].fill = category_fill
         ws[f'A{row}'].font = category_font
@@ -16904,15 +16926,23 @@ async def export_kitchen_closing_stock(
         
         # Sort items by name
         for item_id, item_data in sorted(items.items(), key=lambda x: x[1]["item_name"]):
+            price = item_data.get("price", 0)
+            total_sent = round(item_data["total_sent"], 2)
+            opening_value = round(price * total_sent, 2)
+            
             ws.cell(row=row, column=1, value=serial).border = thin_border
             ws.cell(row=row, column=2, value=item_data["item_name"]).border = thin_border
             ws.cell(row=row, column=3, value=item_data["unit"]).border = thin_border
-            ws.cell(row=row, column=4, value=round(item_data["total_sent"], 2)).border = thin_border
+            ws.cell(row=row, column=4, value=price).border = thin_border
+            ws.cell(row=row, column=5, value=total_sent).border = thin_border
             
             # Empty closing stock cell (highlighted for user input)
-            closing_cell = ws.cell(row=row, column=5, value="")
+            closing_cell = ws.cell(row=row, column=6, value="")
             closing_cell.border = thin_border
             closing_cell.fill = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
+            
+            # Value column (Opening Value)
+            ws.cell(row=row, column=7, value=opening_value).border = thin_border
             
             serial += 1
             row += 1
@@ -16930,9 +16960,11 @@ async def export_kitchen_closing_stock(
     # Column widths
     ws.column_dimensions['A'].width = 8
     ws.column_dimensions['B'].width = 40
-    ws.column_dimensions['C'].width = 12
-    ws.column_dimensions['D'].width = 20
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 12
     ws.column_dimensions['E'].width = 20
+    ws.column_dimensions['F'].width = 18
+    ws.column_dimensions['G'].width = 15
     
     # Save to buffer
     buffer = io.BytesIO()
