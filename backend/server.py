@@ -6258,8 +6258,77 @@ async def get_grn_list(
     if location_id:
         query["destination_location_id"] = location_id
     
-    transactions = list(transactions_collection.find(query).sort("created_at", -1))
-    return [serialize_transaction(txn) for txn in transactions]
+    # Limit results for performance
+    transactions = list(transactions_collection.find(query).sort("created_at", -1).limit(200))
+    
+    # OPTIMIZATION: Batch fetch all required data
+    lot_ids = set()
+    location_ids = set()
+    for txn in transactions:
+        if txn.get("lot_id"):
+            lot_ids.add(txn["lot_id"])
+        if txn.get("source_location_id"):
+            location_ids.add(txn["source_location_id"])
+        if txn.get("destination_location_id"):
+            location_ids.add(txn["destination_location_id"])
+    
+    # Fetch all lots at once
+    lots_map = {}
+    item_ids = set()
+    if lot_ids:
+        try:
+            lots = list(lots_collection.find({"_id": {"$in": [ObjectId(lid) for lid in lot_ids]}}))
+            for lot in lots:
+                lots_map[str(lot["_id"])] = lot
+                if lot.get("item_id"):
+                    item_ids.add(str(lot["item_id"]))
+        except:
+            pass
+    
+    # Fetch all items at once
+    items_map = {}
+    if item_ids:
+        try:
+            items = list(items_collection.find({"_id": {"$in": [ObjectId(iid) for iid in item_ids]}}))
+            items_map = {str(item["_id"]): item for item in items}
+        except:
+            pass
+    
+    # Fetch all locations at once
+    locations_map = {}
+    if location_ids:
+        try:
+            locs = list(locations_collection.find({"_id": {"$in": [ObjectId(lid) for lid in location_ids]}}))
+            locations_map = {str(loc["_id"]): loc.get("name") for loc in locs}
+        except:
+            pass
+    
+    # Serialize with pre-fetched data
+    result = []
+    for txn in transactions:
+        lot = lots_map.get(txn.get("lot_id"))
+        item = items_map.get(str(lot.get("item_id"))) if lot and lot.get("item_id") else None
+        
+        item_name = "Unknown"
+        if item:
+            item_name = item.get("name", "Unknown")
+        elif lot and lot.get("item_name"):
+            item_name = lot["item_name"]
+        
+        result.append({
+            "id": str(txn["_id"]),
+            "type": txn["type"],
+            "lot_id": txn.get("lot_id", ""),
+            "lot_number": lot["lot_number"] if lot else "Unknown",
+            "item_name": item_name,
+            "quantity": txn.get("quantity", 0),
+            "source_location": locations_map.get(txn.get("source_location_id")),
+            "destination_location": locations_map.get(txn.get("destination_location_id")),
+            "notes": txn.get("notes"),
+            "created_at": txn.get("created_at")
+        })
+    
+    return result
 
 # Bulk GRN from Excel/Invoice
 @app.post("/api/grn/bulk")
