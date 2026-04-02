@@ -28,6 +28,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [expandedVendors, setExpandedVendors] = useState({});
+  const [vendorPoDetails, setVendorPoDetails] = useState({});
+  const [loadingVendorDetails, setLoadingVendorDetails] = useState({});
   const [expandedKitchens, setExpandedKitchens] = useState({});
   const [expandedPerishableVendors, setExpandedPerishableVendors] = useState({});
   const [expandedPerishableKitchens, setExpandedPerishableKitchens] = useState({});
@@ -105,6 +107,9 @@ export default function ReportsPage() {
 
   const loadReport = async () => {
     setLoading(true);
+    // Clear cached vendor details when reloading
+    setVendorPoDetails({});
+    setExpandedVendors({});
     try {
       if (activeTab === 'vendor-ledger') {
         const params = {};
@@ -150,11 +155,33 @@ export default function ReportsPage() {
     loadReport();
   }, [activeTab]);
 
-  const toggleVendorExpand = (vendorId) => {
+  const toggleVendorExpand = async (vendorId) => {
+    const isExpanding = !expandedVendors[vendorId];
+    
     setExpandedVendors(prev => ({
       ...prev,
-      [vendorId]: !prev[vendorId]
+      [vendorId]: isExpanding
     }));
+    
+    // Fetch PO details when expanding (if not already loaded)
+    if (isExpanding && !vendorPoDetails[vendorId]) {
+      setLoadingVendorDetails(prev => ({ ...prev, [vendorId]: true }));
+      try {
+        const params = new URLSearchParams();
+        if (filters.start_date) params.append('start_date', filters.start_date);
+        if (filters.end_date) params.append('end_date', filters.end_date);
+        
+        const response = await api.get(`/api/reports/vendor-po-details/${vendorId}?${params.toString()}`);
+        setVendorPoDetails(prev => ({
+          ...prev,
+          [vendorId]: response.data
+        }));
+      } catch (error) {
+        console.error('Error fetching vendor PO details:', error);
+      } finally {
+        setLoadingVendorDetails(prev => ({ ...prev, [vendorId]: false }));
+      }
+    }
   };
 
   const toggleKitchenExpand = (kitchenId) => {
@@ -626,31 +653,41 @@ export default function ReportsPage() {
                         </p>
                       </div>
 
-                      {/* Expanded Details */}
+                      {/* Expanded Details - PO/GRN Table */}
                       {expandedVendors[vendor.vendor_id] && (
-                        <div className="border-t border-slate-800 p-4 space-y-4">
-                          {/* PO Section */}
-                          {(vendor.purchase_orders || []).length > 0 && (
+                        <div className="border-t border-slate-800 p-4">
+                          {loadingVendorDetails[vendor.vendor_id] ? (
+                            <div className="flex items-center justify-center py-6">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-500"></div>
+                              <span className="ml-2 text-slate-400">Loading PO details...</span>
+                            </div>
+                          ) : vendorPoDetails[vendor.vendor_id]?.po_details?.length > 0 ? (
                             <div>
-                              <h4 className="text-sm font-medium text-blue-400 mb-2">Purchase Orders ({vendor.po_count || 0})</h4>
+                              <h4 className="text-sm font-medium text-blue-400 mb-3">Purchase Orders & GRN Details ({vendorPoDetails[vendor.vendor_id]?.count || 0})</h4>
                               <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                   <thead className="bg-slate-800/50">
                                     <tr>
-                                      <th className="text-left p-2 text-slate-400">PO #</th>
-                                      <th className="text-left p-2 text-slate-400">Date</th>
-                                      <th className="text-right p-2 text-slate-400">Items</th>
+                                      <th className="text-left p-2 text-slate-400">PO Number</th>
+                                      <th className="text-left p-2 text-slate-400">PO Date</th>
                                       <th className="text-right p-2 text-slate-400">PO Amount</th>
+                                      <th className="text-left p-2 text-slate-400">GRN Date</th>
+                                      <th className="text-right p-2 text-slate-400">GRN Amount</th>
+                                      <th className="text-left p-2 text-slate-400">Invoice #</th>
                                       <th className="text-center p-2 text-slate-400">Status</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {(vendor.purchase_orders || []).map(po => (
-                                      <tr key={po.id} className="border-t border-slate-800">
-                                        <td className="p-2 text-white font-mono">{po.po_number}</td>
+                                    {vendorPoDetails[vendor.vendor_id].po_details.map((po, idx) => (
+                                      <tr key={po.id || idx} className="border-t border-slate-800 hover:bg-slate-800/30">
+                                        <td className="p-2 text-white font-mono text-xs">{po.po_number}</td>
                                         <td className="p-2 text-slate-400">{po.date}</td>
-                                        <td className="p-2 text-right text-slate-300">{po.items_count}</td>
-                                        <td className="p-2 text-right text-blue-400">₹{(po.total_amount || 0).toLocaleString()}</td>
+                                        <td className="p-2 text-right text-blue-400">₹{(po.po_amount || 0).toLocaleString()}</td>
+                                        <td className="p-2 text-slate-400">{po.grn_date || '-'}</td>
+                                        <td className={`p-2 text-right ${po.grn_amount > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                          {po.grn_amount > 0 ? `₹${po.grn_amount.toLocaleString()}` : '-'}
+                                        </td>
+                                        <td className="p-2 text-slate-300 font-mono text-xs">{po.invoice_number || '-'}</td>
                                         <td className="p-2 text-center">
                                           <span className={`px-2 py-1 rounded-full text-xs ${
                                             po.status === 'received' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -658,7 +695,7 @@ export default function ReportsPage() {
                                             po.status === 'cancelled' ? 'bg-red-500/20 text-red-400' :
                                             'bg-blue-500/20 text-blue-400'
                                           }`}>
-                                            {po.status.toUpperCase()}
+                                            {(po.status || 'pending').toUpperCase()}
                                           </span>
                                         </td>
                                       </tr>
@@ -666,76 +703,18 @@ export default function ReportsPage() {
                                   </tbody>
                                   <tfoot className="bg-slate-800/30">
                                     <tr>
-                                      <td colSpan="3" className="p-2 text-right text-slate-400 font-medium">PO Total:</td>
-                                      <td className="p-2 text-right text-blue-400 font-bold">₹{(vendor.total_po_value || 0).toLocaleString()}</td>
+                                      <td colSpan="2" className="p-2 text-right text-slate-400 font-medium">Total:</td>
+                                      <td className="p-2 text-right text-blue-400 font-bold">₹{(vendorPoDetails[vendor.vendor_id]?.total_po_value || 0).toLocaleString()}</td>
                                       <td></td>
-                                    </tr>
-                                    <tr className="border-t border-slate-700">
-                                      <td colSpan="3" className="p-2 text-right text-slate-400 font-medium">GRN Received:</td>
-                                      <td className="p-2 text-right text-emerald-400 font-bold">₹{(vendor.total_grn_value || 0).toLocaleString()}</td>
-                                      <td></td>
-                                    </tr>
-                                    <tr className="border-t border-slate-700">
-                                      <td colSpan="3" className="p-2 text-right text-slate-400 font-medium">Difference (PO - GRN):</td>
-                                      <td className={`p-2 text-right font-bold ${((vendor.total_po_value || 0) - (vendor.total_grn_value || 0)) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                        ₹{((vendor.total_po_value || 0) - (vendor.total_grn_value || 0)).toLocaleString()}
-                                      </td>
-                                      <td></td>
+                                      <td className="p-2 text-right text-emerald-400 font-bold">₹{(vendorPoDetails[vendor.vendor_id]?.total_grn_value || 0).toLocaleString()}</td>
+                                      <td colSpan="2"></td>
                                     </tr>
                                   </tfoot>
                                 </table>
                               </div>
                             </div>
-                          )}
-
-                          {/* GRN Section */}
-                          {(vendor.grn_entries || []).length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-medium text-emerald-400 mb-2">Materials Received - GRN & Daily Perishables ({vendor.grn_count || 0})</h4>
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead className="bg-slate-800/50">
-                                    <tr>
-                                      <th className="text-left p-2 text-slate-400">Ref #</th>
-                                      <th className="text-left p-2 text-slate-400">Date</th>
-                                      <th className="text-left p-2 text-slate-400">Item</th>
-                                      <th className="text-left p-2 text-slate-400">Category</th>
-                                      <th className="text-left p-2 text-slate-400">Kitchen</th>
-                                      <th className="text-right p-2 text-slate-400">Qty</th>
-                                      <th className="text-right p-2 text-slate-400">Rate</th>
-                                      <th className="text-right p-2 text-slate-400">Amount</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {(vendor.grn_entries || []).map((grn, idx) => (
-                                      <tr key={`${grn.lot_id}-${idx}`} className={`border-t border-slate-800 ${grn.type === 'Daily Perishable' ? 'bg-amber-900/10' : ''}`}>
-                                        <td className="p-2 text-white font-mono text-xs">
-                                          {grn.lot_number}
-                                          {grn.type === 'Daily Perishable' && <span className="ml-1 text-amber-400 text-xs">(DP)</span>}
-                                        </td>
-                                        <td className="p-2 text-slate-400">{grn.date}</td>
-                                        <td className="p-2 text-white">{grn.item_name}</td>
-                                        <td className="p-2 text-slate-400">{grn.category}</td>
-                                        <td className="p-2 text-slate-400 text-xs">{grn.kitchen_name || 'Main Store'}</td>
-                                        <td className="p-2 text-right text-slate-300">{grn.quantity} {grn.unit}</td>
-                                        <td className="p-2 text-right text-slate-300">₹{grn.rate || 0}</td>
-                                        <td className="p-2 text-right text-white">₹{(grn.amount || 0).toLocaleString()}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                  <tfoot className="bg-slate-800/30">
-                                    <tr>
-                                      <td colSpan="7" className="p-2 text-right text-slate-400 font-medium">Total (GRN + DP):</td>
-                                      <td className="p-2 text-right text-emerald-400 font-bold">₹{(vendor.total_grn_value || 0).toLocaleString()}</td>
-                                    </tr>
-                                  </tfoot>
-                                </table>
-                              </div>
-                            </div>
-                          )}
-
-                          {(vendor.purchase_orders || []).length === 0 && (vendor.grn_entries || []).length === 0 && (
-                            <p className="text-slate-500 text-center py-4">No transactions found for this vendor</p>
+                          ) : (
+                            <p className="text-slate-500 text-center py-4">No PO/GRN transactions found for this vendor</p>
                           )}
                         </div>
                       )}

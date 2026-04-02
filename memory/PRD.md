@@ -239,10 +239,21 @@ Set up DREAMOVEN Inventory Management System with:
 - GET /api/alerts
 - GET /api/dashboard/stats
 
+### Vendor Ledger API (April 2, 2026)
+- GET /api/reports/vendor-po-details/{vendor_id} - Get detailed PO/GRN info for a specific vendor
+
 ## Testing
 - Backend: 100% pass rate (19/19 tests)
 - Frontend: All UI flows verified
 - Test report: /app/test_reports/iteration_2.json
+
+## Recent Updates (April 2, 2026)
+
+### Vendor Ledger Dropdown Enhancement
+- Added detailed PO/GRN table when expanding vendor in Vendor Ledger
+- Shows: PO Number, PO Date, PO Amount, GRN Date, GRN Amount, Invoice #, Status
+- Totals displayed at bottom of table
+- New API endpoint: `/api/reports/vendor-po-details/{vendor_id}`
 
 ## Next Tasks
 1. Implement 5-step GRN workflow (Item verification, Photo capture, Weight check, Quality check, Final approval)

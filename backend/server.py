@@ -10773,6 +10773,104 @@ async def get_vendor_ledger(
                 "error": str(e)
             }
         }
+
+
+# ============ Vendor PO Details for Ledger Dropdown ============
+
+@app.get("/api/reports/vendor-po-details/{vendor_id}")
+async def get_vendor_po_details(
+    vendor_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    Get detailed PO information for a specific vendor.
+    Used when expanding a vendor in the Vendor Ledger dropdown.
+    Returns: PO Number, Date, PO Amount, GRN Date, GRN Amount, Invoice Number
+    """
+    try:
+        # Build date filter
+        date_filter = {"vendor_id": vendor_id, "created_by_location_name": "Main Store"}
+        
+        if start_date:
+            date_filter["created_at"] = {"$gte": start_date + "T00:00:00"}
+        if end_date:
+            if "created_at" in date_filter:
+                date_filter["created_at"]["$lte"] = end_date + "T23:59:59"
+            else:
+                date_filter["created_at"] = {"$lte": end_date + "T23:59:59"}
+        
+        # Fetch POs with required fields
+        pos = list(purchase_orders_collection.find(
+            date_filter,
+            {
+                "_id": 1,
+                "po_number": 1,
+                "created_at": 1,
+                "total_amount": 1,
+                "items": 1,
+                "grn_amount": 1,
+                "grn_date": 1,
+                "invoice_number": 1,
+                "status": 1
+            }
+        ).sort("created_at", -1).limit(200))
+        
+        po_details = []
+        total_po_value = 0
+        total_grn_value = 0
+        
+        for po in pos:
+            # Calculate PO value from items if total_amount is missing
+            po_value = po.get("total_amount", 0) or 0
+            if not po_value and po.get("items"):
+                for item in po.get("items", []):
+                    po_value += (item.get("quantity", 0) or 0) * (item.get("rate", 0) or 0)
+            
+            grn_amount = po.get("grn_amount", 0) or 0
+            
+            # Parse created_at date
+            created_at = po.get("created_at", "")
+            po_date = created_at[:10] if created_at else ""
+            
+            # Parse grn_date
+            grn_date_raw = po.get("grn_date", "")
+            grn_date = ""
+            if grn_date_raw:
+                if isinstance(grn_date_raw, str):
+                    grn_date = grn_date_raw[:10]
+                elif hasattr(grn_date_raw, 'strftime'):
+                    grn_date = grn_date_raw.strftime("%Y-%m-%d")
+            
+            po_details.append({
+                "id": str(po["_id"]),
+                "po_number": po.get("po_number", ""),
+                "date": po_date,
+                "po_amount": round(po_value, 2),
+                "grn_date": grn_date,
+                "grn_amount": round(grn_amount, 2),
+                "invoice_number": po.get("invoice_number", "") or "",
+                "status": po.get("status", "pending")
+            })
+            
+            total_po_value += po_value
+            total_grn_value += grn_amount
+        
+        return {
+            "vendor_id": vendor_id,
+            "po_details": po_details,
+            "total_po_value": round(total_po_value, 2),
+            "total_grn_value": round(total_grn_value, 2),
+            "count": len(po_details)
+        }
+        
+    except Exception as e:
+        print(f"Error fetching vendor PO details: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
     
 # ============ Kitchen Ledger Report ============
 
